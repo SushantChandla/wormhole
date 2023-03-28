@@ -6,7 +6,7 @@ use accountant::state::{
     account::{self, Balance},
     transfer, Kind, Modification, Transfer,
 };
-use cosmwasm_std::{to_binary, Uint256};
+use cosmwasm_std::Uint256;
 use global_accountant::msg::TransferStatus;
 use helpers::*;
 use wormhole::{token::Message, vaa::Body, Address, Amount};
@@ -17,21 +17,17 @@ fn create_accounts(wh: &fake::WormholeKeeper, contract: &mut Contract, count: us
     for i in 0..count {
         for j in 0..count {
             s += 1;
-            let m = to_binary(&Modification {
+            let m = Modification {
                 sequence: s,
                 chain_id: i as u16,
                 token_chain: j as u16,
                 token_address: [i as u8; 32].into(),
                 kind: Kind::Add,
                 amount: Uint256::from(j as u128),
-                reason: "create_accounts".into(),
-            })
-            .unwrap();
+                reason: "create_accounts".try_into().unwrap(),
+            };
 
-            let signatures = wh.sign(&m);
-            contract
-                .modify_balance(m, wh.guardian_set_index(), signatures)
-                .unwrap();
+            contract.modify_balance(m, wh).unwrap();
         }
     }
 }
@@ -101,14 +97,10 @@ pub fn create_modifications(
             token_address: [i as u8; 32].into(),
             kind: Kind::Add,
             amount: Uint256::from(i as u128),
-            reason: format!("{i}"),
+            reason: format!("{i}").as_str().try_into().unwrap(),
         };
 
-        let msg = to_binary(&m).unwrap();
-        let signatures = wh.sign(&msg);
-        contract
-            .modify_balance(msg, wh.guardian_set_index(), signatures)
-            .unwrap();
+        contract.modify_balance(m.clone(), wh).unwrap();
 
         out.push(m);
     }
@@ -143,9 +135,10 @@ fn missing_account() {
         [(count + 3) as u8; 32].into(),
     );
 
-    contract
+    let err = contract
         .query_balance(missing)
         .expect_err("successfully queried missing account key");
+    assert!(err.to_string().to_lowercase().contains("balance not found"));
 }
 
 #[test]
@@ -220,6 +213,7 @@ fn all_balances_sub_range() {
 fn transfer_data() {
     let count = 2;
     let (wh, mut contract) = proper_instantiate();
+    register_emitters(&wh, &mut contract, count);
     create_transfers(&wh, &mut contract, count);
 
     for i in 0..count {
@@ -241,6 +235,7 @@ fn transfer_data() {
 fn missing_transfer() {
     let count = 2;
     let (wh, mut contract) = proper_instantiate();
+    register_emitters(&wh, &mut contract, count);
     create_transfers(&wh, &mut contract, count);
 
     let missing = transfer::Key::new(
@@ -249,15 +244,17 @@ fn missing_transfer() {
         (count + 3) as u64,
     );
 
-    contract
+    let err = contract
         .query_transfer(missing)
         .expect_err("successfully queried missing transfer key");
+    assert!(err.to_string().to_lowercase().contains("not found"));
 }
 
 #[test]
 fn all_transfer_data() {
     let count = 3;
     let (wh, mut contract) = proper_instantiate();
+    register_emitters(&wh, &mut contract, count);
     let transfers = create_transfers(&wh, &mut contract, count);
 
     let resp = contract.query_all_transfers(None, None).unwrap();
@@ -277,6 +274,7 @@ fn all_transfer_data() {
 fn batch_transfer_status() {
     let count = 3;
     let (wh, mut contract) = proper_instantiate();
+    register_emitters(&wh, &mut contract, count);
     let transfers = create_transfers(&wh, &mut contract, count);
 
     let keys = transfers.iter().map(|t| &t.key).cloned().collect();
@@ -295,6 +293,7 @@ fn batch_transfer_status() {
 fn all_transfer_data_sub_range() {
     let count = 5;
     let (wh, mut contract) = proper_instantiate();
+    register_emitters(&wh, &mut contract, count);
     create_transfers(&wh, &mut contract, count);
 
     for i in 0..count {
@@ -338,9 +337,10 @@ fn missing_modification() {
 
     let missing = (count + 1) as u64;
 
-    contract
+    let err = contract
         .query_modification(missing)
         .expect_err("successfully queried missing modification key");
+    assert!(err.to_string().to_lowercase().contains("not found"));
 }
 
 #[test]

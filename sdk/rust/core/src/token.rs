@@ -228,6 +228,9 @@ pub struct GovernancePacket {
     pub action: Action,
 }
 
+// MODULE = "TokenBridge"
+pub const MODULE: [u8; 32] = *b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00TokenBridge";
+
 // The wire format for GovernancePackets is wonky and doesn't lend itself well to auto-deriving
 // Serialize / Deserialize so we implement it manually here.
 mod governance_packet_impl {
@@ -240,16 +243,9 @@ mod governance_packet_impl {
     };
 
     use crate::{
-        token::{Action, GovernancePacket},
+        token::{Action, GovernancePacket, MODULE},
         Address, Chain,
     };
-
-    // MODULE = "TokenBridge"
-    const MODULE: [u8; 32] = [
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x42, 0x72, 0x69, 0x64,
-        0x67, 0x65,
-    ];
 
     struct Module;
 
@@ -300,7 +296,7 @@ mod governance_packet_impl {
 
             // The wire format encodes the action before the chain and then appends the actual
             // action payload.
-            match self.action {
+            match self.action.clone() {
                 Action::RegisterChain {
                     chain,
                     emitter_address,

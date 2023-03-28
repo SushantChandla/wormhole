@@ -227,7 +227,7 @@ pub enum ModifyBalanceError {
 ///           token_address: [3u8; 32].into(),
 ///           kind: Kind::Sub,
 ///           amount: Uint256::from(4u128),
-///           reason: "test".into(),
+///           reason: "test".try_into().unwrap(),
 ///       };
 ///  
 ///       let err = modify_balance(deps.as_mut(), m)
@@ -400,7 +400,7 @@ mod tests {
                 token_address: [i as u8; 32].into(),
                 kind: if i % 2 == 0 { Kind::Add } else { Kind::Sub },
                 amount: Uint256::from(i as u128),
-                reason: format!("{i}"),
+                reason: "test".into(),
             };
             out.push(m);
         }
@@ -1251,7 +1251,7 @@ mod tests {
                 token_address: [i as u8; 32].into(),
                 kind: if i % 2 == 0 { Kind::Add } else { Kind::Sub },
                 amount: Uint256::from(i as u128),
-                reason: format!("{i}"),
+                reason: "test".into(),
             };
 
             let key = i as u64;

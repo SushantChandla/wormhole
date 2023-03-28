@@ -87,11 +87,6 @@ pub struct ObservationError {
 }
 
 #[cw_serde]
-pub struct Upgrade {
-    pub new_addr: [u8; 32],
-}
-
-#[cw_serde]
 pub enum ExecuteMsg {
     /// Submit a series of observations.  Once the contract has received a quorum of signatures
     /// for a particular observation, the transfer associated with the observation will be
@@ -106,32 +101,9 @@ pub enum ExecuteMsg {
         signature: Signature,
     },
 
-    /// Modifies the balance of a single account.  Used to manually override the balance.
-    ModifyBalance {
-        // A serialized `Modification` message.
-        modification: Binary,
-
-        // The index of the guardian set used to sign this modification.
-        guardian_set_index: u32,
-
-        // A quorum of signatures for `modification`.
-        signatures: Vec<Signature>,
-    },
-
-    UpgradeContract {
-        // A serialized `Upgrade` message.
-        upgrade: Binary,
-
-        // The index of the guardian set used to sign this request.
-        guardian_set_index: u32,
-
-        // A quorum of signatures for `key`.
-        signatures: Vec<Signature>,
-    },
-
     /// Submit one or more signed VAAs to update the on-chain state.  If processing any of the VAAs
     /// returns an error, the entire transaction is aborted and none of the VAAs are committed.
-    SubmitVAAs {
+    SubmitVaas {
         /// One or more VAAs to be submitted.  Each VAA should be encoded in the standard wormhole
         /// wire format.
         vaas: Vec<Binary>,

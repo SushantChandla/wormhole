@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.11
+
+### Added
+
+Base testnet support
+
+## 0.9.10
+
+## Added
+
+Aptos NFT bridge support
+
 ## 0.9.9
 
 ## Changed

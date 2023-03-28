@@ -19,8 +19,8 @@ pub const TRANSFERS: Map<transfer::Key, transfer::Data> = Map::new("accountant/t
 #[cw_serde]
 #[derive(Eq, PartialOrd, Ord)]
 pub enum Kind {
-    Add,
-    Sub,
+    Add = 1,
+    Sub = 2,
 }
 
 impl fmt::Display for Kind {

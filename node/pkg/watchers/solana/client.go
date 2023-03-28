@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -43,7 +42,7 @@ type (
 		pumpData    chan []byte
 		rpcClient   *rpc.Client
 		// Readiness component
-		readiness readiness.Component
+		readinessSync readiness.Component
 		// VAA ChainID of the network we're connecting to.
 		chainID vaa.ChainID
 		// Human readable name of network
@@ -182,20 +181,19 @@ func NewSolanaWatcher(
 	msgC chan<- *common.MessagePublication,
 	obsvReqC <-chan *gossipv1.ObservationRequest,
 	commitment rpc.CommitmentType,
-	readiness readiness.Component,
 	chainID vaa.ChainID) *SolanaWatcher {
 	return &SolanaWatcher{
-		rpcUrl:      rpcUrl,
-		wsUrl:       wsUrl,
-		contract:    contractAddress,
-		rawContract: rawContract,
-		msgC:        msgC,
-		obsvReqC:    obsvReqC,
-		commitment:  commitment,
-		rpcClient:   rpc.New(rpcUrl),
-		readiness:   readiness,
-		chainID:     chainID,
-		networkName: vaa.ChainID(chainID).String(),
+		rpcUrl:        rpcUrl,
+		wsUrl:         wsUrl,
+		contract:      contractAddress,
+		rawContract:   rawContract,
+		msgC:          msgC,
+		obsvReqC:      obsvReqC,
+		commitment:    commitment,
+		rpcClient:     rpc.New(rpcUrl),
+		readinessSync: common.MustConvertChainIdToReadinessSyncing(chainID),
+		chainID:       chainID,
+		networkName:   vaa.ChainID(chainID).String(),
 	}
 }
 
@@ -246,24 +244,9 @@ func (s *SolanaWatcher) SetupWebSocket(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			default:
-				rCtx, cancel := context.WithTimeout(ctx, time.Second*300) // 5 minute
-				defer cancel()
-
-				if _, msg, err := ws.Read(rCtx); err != nil {
-					if errors.Is(err, context.DeadlineExceeded) {
-						// When a websocket context times out, it closes the websocket...  This means we have to re-subscribe
-						ws.Close(websocket.StatusNormalClosure, "")
-						err, ws = s.SetupSubscription(ctx)
-						if err != nil {
-							return err
-						}
-						continue
-					}
-
+				if msg, err := s.readWebSocketWithTimeout(ctx, ws); err != nil {
 					logger.Error(fmt.Sprintf("ReadMessage: '%s'", err.Error()))
-					if errors.Is(err, io.EOF) {
-						return err
-					}
+					return err
 				} else {
 					s.pumpData <- msg
 				}
@@ -272,6 +255,13 @@ func (s *SolanaWatcher) SetupWebSocket(ctx context.Context) error {
 	})
 
 	return nil
+}
+
+func (s *SolanaWatcher) readWebSocketWithTimeout(ctx context.Context, ws *websocket.Conn) ([]byte, error) {
+	rCtx, cancel := context.WithTimeout(ctx, time.Second*300) // 5 minute
+	defer cancel()
+	_, msg, err := ws.Read(rCtx)
+	return msg, err
 }
 
 func (s *SolanaWatcher) Run(ctx context.Context) error {
@@ -288,7 +278,9 @@ func (s *SolanaWatcher) Run(ctx context.Context) error {
 	s.errC = make(chan error)
 	s.pumpData = make(chan []byte)
 
-	if s.wsUrl != nil {
+	useWs := false
+	if s.wsUrl != nil && *s.wsUrl != "" {
+		useWs = true
 		err := s.SetupWebSocket(ctx)
 		if err != nil {
 			return err
@@ -341,13 +333,13 @@ func (s *SolanaWatcher) Run(ctx context.Context) error {
 					lastSlot = slot - 1
 				}
 				currentSolanaHeight.WithLabelValues(s.networkName, string(s.commitment)).Set(float64(slot))
-				readiness.SetReady(s.readiness)
+				readiness.SetReady(s.readinessSync)
 				p2p.DefaultRegistry.SetNetworkStats(s.chainID, &gossipv1.Heartbeat_Network{
 					Height:          int64(slot),
 					ContractAddress: contractAddr,
 				})
 
-				if s.wsUrl == nil {
+				if !useWs {
 					rangeStart := lastSlot + 1
 					rangeEnd := slot
 
